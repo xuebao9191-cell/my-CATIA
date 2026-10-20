@@ -1,0 +1,80 @@
+CATScript.MacroVersion = "1.0"
+CATScript.Name = "批量导入点"
+CATScript.Description = "从文本文件读取 XYZ 坐标批量创建点"
+CATScript.Language = "VBScript"
+
+' 输入格式：每行 x,y,z；空行和以 # 开头的行为忽略。
+' 运行前：修改 POINTS_FILE 为本机路径，并打开一个 CATPart。
+Sub CATMain()
+    Const POINTS_FILE = "D:\CATIA\Points\points.txt"
+
+    Dim catApp, doc, part, hsf
+    Dim hb, pointObj
+    Dim fso, ts
+    Dim lineText, parts
+    Dim x, y, z
+    Dim countOK, countBad, lineNo
+
+    countOK = 0
+    countBad = 0
+    lineNo = 0
+
+    On Error Resume Next
+    Set catApp = GetObject(, "CATIA.Application")
+    If Err.Number <> 0 Then
+        MsgBox "请先启动 CATIA。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If catApp.Documents.Count = 0 Then
+        MsgBox "请先打开一个 CATPart。", vbExclamation
+        Exit Sub
+    End If
+    Set doc = catApp.ActiveDocument
+    If doc.Type <> "CATPart" Then
+        MsgBox "当前活动文档不是 CATPart。", vbExclamation
+        Exit Sub
+    End If
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FileExists(POINTS_FILE) Then
+        MsgBox "找不到点文件：" & POINTS_FILE, vbExclamation
+        Exit Sub
+    End If
+    Set ts = fso.OpenTextFile(POINTS_FILE, 1, False)
+
+    Set part = doc.Part
+    Set hsf = part.HybridShapeFactory
+
+    If part.HybridBodies.Count = 0 Then
+        Set hb = part.HybridBodies.Add
+        hb.Name = "Imported_Points"
+    Else
+        Set hb = part.HybridBodies.Item(1)
+    End If
+
+    Do While Not ts.AtEndOfStream
+        lineNo = lineNo + 1
+        lineText = Trim(ts.ReadLine)
+        If Len(lineText) > 0 And Left(lineText, 1) <> "#" Then
+            parts = Split(lineText, ",")
+            If UBound(parts) <> 2 Then
+                countBad = countBad + 1
+            ElseIf Not IsNumeric(Trim(parts(0))) Or Not IsNumeric(Trim(parts(1))) Or Not IsNumeric(Trim(parts(2))) Then
+                countBad = countBad + 1
+            Else
+                x = CDbl(Trim(parts(0)))
+                y = CDbl(Trim(parts(1)))
+                z = CDbl(Trim(parts(2)))
+                Set pointObj = hsf.AddNewPointCoord(x, y, z)
+                hb.HybridShapes.Add pointObj
+                countOK = countOK + 1
+            End If
+        End If
+    Loop
+
+    ts.Close
+    part.Update
+    MsgBox "点导入完成。" & vbCrLf & "成功：" & countOK & vbCrLf & "跳过/错误行：" & countBad, vbInformation
+End Sub

@@ -1,0 +1,74 @@
+CATScript.MacroVersion = "1.0"
+CATScript.Name = "批量测量体积质量"
+CATScript.Description = "批量测量已打开 CATPart 的体积/面积并估算质量"
+CATScript.Language = "VBScript"
+
+' 第一阶段仅测量已打开的 CATPart；CATProduct 装配体暂不递归统计。
+' 密度单位假定 kg/m^3，体积单位假定 m^3；请在本机 CATIA V5 中用已知模型校核单位。
+' 结果写入 OUTPUT_FILE 指定的 CSV。
+Sub CATMain()
+    Const OUTPUT_FILE = "D:\CATIA\measure_result.csv"
+    Const DENSITY_KG_M3 = 7850
+
+    Dim catApp, doc, part, body
+    Dim spa, ref, measurable
+    Dim fso, ts
+    Dim volume, area, mass
+    Dim okCount, failCount
+
+    okCount = 0
+    failCount = 0
+
+    On Error Resume Next
+    Set catApp = GetObject(, "CATIA.Application")
+    If Err.Number <> 0 Then
+        MsgBox "请先启动 CATIA。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists("D:\CATIA") Then fso.CreateFolder "D:\CATIA"
+    Set ts = fso.CreateTextFile(OUTPUT_FILE, True, True)
+    ts.WriteLine "Document,Type,Volume_m3,Area_m2,Density_kg_m3,EstimatedMass_kg,Status"
+
+    For Each doc In catApp.Documents
+        If doc.Type = "CATPart" Then
+            On Error Resume Next
+            Set part = doc.Part
+            If part.Bodies.Count = 0 Then
+                ts.WriteLine CsvEscape(doc.Name) & ",CATPart,,,,,ERROR: no body"
+                failCount = failCount + 1
+            Else
+                Set body = part.Bodies.Item(1)
+                Set spa = doc.GetWorkbench("SPAWorkbench")
+                Set ref = part.CreateReferenceFromObject(body)
+                Set measurable = spa.GetMeasurable(ref)
+
+                volume = measurable.Volume
+                area = measurable.Area
+                mass = volume * DENSITY_KG_M3
+
+                ts.WriteLine CsvEscape(doc.Name) & ",CATPart," & CStr(volume) & "," & _
+                             CStr(area) & "," & CStr(DENSITY_KG_M3) & "," & _
+                             CStr(mass) & ",OK"
+                okCount = okCount + 1
+            End If
+            If Err.Number <> 0 Then
+                failCount = failCount + 1
+            End If
+            On Error GoTo 0
+        ElseIf doc.Type = "CATProduct" Then
+            ts.WriteLine CsvEscape(doc.Name) & ",CATProduct,,,,,SKIPPED"
+        End If
+    Next
+
+    ts.Close
+    MsgBox "测量结束。" & vbCrLf & "成功零件：" & okCount & vbCrLf & _
+           "失败零件：" & failCount & vbCrLf & "结果：" & OUTPUT_FILE & vbCrLf & _
+           "注意：质量按统一密度估算，不等于材料属性的真实质量。", vbInformation
+End Sub
+
+Function CsvEscape(value)
+    CsvEscape = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
+End Function

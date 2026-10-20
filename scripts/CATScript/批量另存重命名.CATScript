@@ -1,0 +1,67 @@
+CATScript.MacroVersion = "1.0"
+CATScript.Name = "批量另存重命名"
+CATScript.Description = "将当前打开的文档另存到输出目录并添加前缀"
+CATScript.Language = "VBScript"
+
+' 功能：将当前打开的 CATPart / CATProduct 另存到输出目录，并添加前缀。
+' 运行前：修改 OUTPUT_FOLDER、NEW_PREFIX 为本机路径与所需前缀。
+Sub CATMain()
+    Const OUTPUT_FOLDER = "D:\CATIA\Output"
+    Const NEW_PREFIX = "CA-"
+
+    Dim catApp, doc, fso
+    Dim targetPath, targetName
+    Dim okCount, failCount
+
+    okCount = 0
+    failCount = 0
+
+    On Error Resume Next
+    Set catApp = GetObject(, "CATIA.Application")
+    If Err.Number <> 0 Then
+        MsgBox "请先启动 CATIA。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(OUTPUT_FOLDER) Then
+        fso.CreateFolder OUTPUT_FOLDER
+    End If
+
+    For Each doc In catApp.Documents
+        If doc.Type = "CATPart" Or doc.Type = "CATProduct" Then
+            On Error Resume Next
+            targetName = NEW_PREFIX & fso.GetFileName(doc.Name)
+            targetPath = fso.BuildPath(OUTPUT_FOLDER, targetName)
+
+            ' 不覆盖已有文件：自动追加编号。
+            If fso.FileExists(targetPath) Then
+                targetPath = UniquePath(fso, OUTPUT_FOLDER, NEW_PREFIX, doc.Name)
+            End If
+
+            doc.SaveAs targetPath
+            If Err.Number <> 0 Then
+                failCount = failCount + 1
+            Else
+                okCount = okCount + 1
+            End If
+            On Error GoTo 0
+        End If
+    Next
+
+    MsgBox "批量另存结束。" & vbCrLf & "成功：" & okCount & vbCrLf & "失败：" & failCount, vbInformation
+End Sub
+
+Function UniquePath(fso, folder, prefix, originalName)
+    Dim baseName, ext, candidate, n
+    baseName = fso.GetBaseName(originalName)
+    ext = fso.GetExtensionName(originalName)
+    n = 1
+    Do
+        candidate = fso.BuildPath(folder, prefix & baseName & "_" & Right("000" & n, 3) & "." & ext)
+        If Not fso.FileExists(candidate) Then Exit Do
+        n = n + 1
+    Loop
+    UniquePath = candidate
+End Function

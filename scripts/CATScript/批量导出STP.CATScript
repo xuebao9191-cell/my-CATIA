@@ -1,0 +1,53 @@
+CATScript.MacroVersion = "1.0"
+CATScript.Name = "批量导出STP"
+CATScript.Description = "批量导出文件夹中的 CATPart/CATProduct 为 STEP"
+CATScript.Language = "VBScript"
+
+' 功能：导出指定文件夹中的 CATPart / CATProduct 为 STEP。
+' 注意：只扫描当前文件夹，不递归子文件夹；已有同名 .stp 文件会被覆盖。
+' 运行前：修改 INPUT_FOLDER 为本机路径。
+Sub CATMain()
+    Const INPUT_FOLDER = "D:\CATIA\Parts"
+
+    Dim fso, folder, file
+    Dim catApp, doc
+    Dim ext, outPath
+    Dim okCount, failCount
+
+    okCount = 0
+    failCount = 0
+
+    On Error Resume Next
+    Set catApp = GetObject(, "CATIA.Application")
+    If Err.Number <> 0 Then
+        MsgBox "请先启动 CATIA。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(INPUT_FOLDER) Then
+        MsgBox "输入目录不存在：" & INPUT_FOLDER, vbExclamation
+        Exit Sub
+    End If
+    Set folder = fso.GetFolder(INPUT_FOLDER)
+
+    For Each file In folder.Files
+        ext = LCase(fso.GetExtensionName(file.Name))
+        If ext = "catpart" Or ext = "catproduct" Then
+            On Error Resume Next
+            outPath = fso.BuildPath(INPUT_FOLDER, fso.GetBaseName(file.Name) & ".stp")
+            Set doc = catApp.Documents.Open(file.Path)
+            doc.ExportData outPath, "stp"
+            doc.Close
+            If Err.Number <> 0 Then
+                failCount = failCount + 1
+            Else
+                okCount = okCount + 1
+            End If
+            On Error GoTo 0
+        End If
+    Next
+
+    MsgBox "STEP 导出结束。" & vbCrLf & "成功：" & okCount & vbCrLf & "失败：" & failCount, vbInformation
+End Sub
