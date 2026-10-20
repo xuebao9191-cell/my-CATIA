@@ -1,0 +1,15 @@
+// ============================================================
+// 功能：参数化建模基础示例 - 通过参数驱动尺寸
+// 环境：CATIA V5 知识工程 (Knowledge / Knowledge Advisor)
+// ============================================================
+
+// 创建一个长度参数
+Parameters.CreateDimension("零件_长", "LENGTH", 100mm)
+Parameters.CreateDimension("零件_宽", "LENGTH", 50mm)
+Parameters.CreateDimension("零件_高", "LENGTH", 20mm)
+
+// 体积参数（派生）
+Parameters.CreateFormula("零件_体积", "零件_长 * 零件_宽 * 零件_高")
+
+// 规则：当长超过 200mm 时提示
+Rules.CreateRule("尺寸检查", "零件_长 > 200mm", "Message(""长度超限！"")")
