@@ -1,30 +1,17 @@
 # my-CATIA
 
-CATIA V5 二次开发脚本（VBA / EKL）与学习笔记仓库。
+CATIA V5 二次开发脚本（VBA / EKL）、学习笔记与模型归档示例。
 
-## 目录结构
+## 从这里开始
 
-```
-my-CATIA/
-├── scripts/
-│   ├── VBA/          # VBA 宏脚本（自动化、批量处理）
-│   └── EKL/          # EKL 知识工程脚本（参数化、规则）
-└── notes/            # 学习笔记（Markdown）
-```
+- [导入与启动指南](IMPORT_GUIDE.md)：VBA、EKL、模型文件分别如何加载。
+- [VBA 脚本目录](scripts/VBA/)：CATIA 自动化宏。
+- [EKL 示例说明](scripts/EKL/README.md)：知识工程示例状态与验证方式。
+- [学习笔记](notes/)：CATIA 常用工作台和建模操作。
+- [模型存放说明](models/xuebao/README.md)：模型目录约定。
 
-## 脚本说明
+## 重要说明
 
-- **scripts/VBA**：Excel / CATIA VBA 宏，用于批量导入导出、批量处理、测量统计等，可直接在 CATIA Tools → Macros 中运行。
-- **scripts/EKL**：知识工程模块脚本，用于参数化建模、规则与检查约束。
+仓库中的 `.bas` 是 VBA 模块源文件，通常需要导入 CATIA 可访问的 VBA 项目后运行；`.EKL` 文件按知识工程示例片段管理，需在对应编辑器中验证；CATPart/CATProduct/STEP/IGES 模型需通过 CATIA 的打开命令单独加载。**打开仓库本身不会自动将所有文件导入 CATIA，也不建议自动执行所有宏。**
 
-## 笔记说明
-
-笔记按 CATIA 常用工作台与功能模块组织，适合从入门到进阶，重点覆盖飞行器构造建模常用操作。
-
-## 使用
-
-1. VBA 脚本：CATIA 中 `Tools → Macros → Run`，选择对应 `.bas` 或宏模块运行。
-2. EKL 脚本：在 `Knowledge` 或 `Knowledge Advisor` 工作台中新建知识文件（.EKL）加载。
-3. 笔记：用任意 Markdown 阅读器打开。
-
-> 注意：脚本基于 CATIA V5 编写，运行前请先打开对应类型的文档（Part / Product 等）。
+批量脚本运行前请检查路径、输出覆盖策略，并先在副本或测试模型上验证。代码静态修订不等于已在所有 CATIA V5 版本、服务包与许可证配置下实机验证。

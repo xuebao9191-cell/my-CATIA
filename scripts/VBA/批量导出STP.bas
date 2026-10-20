@@ -1,47 +1,53 @@
-Attribute VB_Name = "批量导出STP_IGES"
-' ============================================================
-' 功能：批量将当前文件夹下所有 .CATPart / .CATProduct
-'       导出为 STEP (.stp) 格式
-' 用法：修改 strFolder 为你的零件所在文件夹，然后运行宏
-' 环境：CATIA V5 + VBA (Tools -> Macros)
-' ============================================================
+Attribute VB_Name = "批量导出STP"
+Option Explicit
 
+' 功能：导出指定文件夹中的 CATPart / CATProduct 为 STEP。
+' 注意：只扫描当前文件夹，不递归子文件夹；已有同名 .stp 文件会被覆盖。
+' 说明：本宏打开的是磁盘上干净的文件副本（未修改），Close 不会触发保存询问。
 Sub 批量导出STP()
+    Const INPUT_FOLDER As String = "D:\CATIA\Parts"
 
-    Dim strFolder As String
-    Dim strFile As String
-    Dim objFilesystem As Object
-    Dim objFolder As Object
-    Dim objFile As Object
-    Dim oCATIA As Object
-    Dim oDocuments As Object
-    Dim oDocument As Object
-    Dim oProduct As Object
+    Dim fso As Object, folder As Object, file As Object
+    Dim catApp As Object, doc As Object
+    Dim ext As String, outPath As String
+    Dim okCount As Long, failCount As Long
 
-    strFolder = "D:\CATIA\Parts"   ' <-- 修改为你自己的文件夹
+    On Error GoTo FatalError
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(INPUT_FOLDER) Then Err.Raise vbObjectError + 200, , "输入目录不存在：" & INPUT_FOLDER
+    Set folder = fso.GetFolder(INPUT_FOLDER)
+    Set catApp = GetObject(, "CATIA.Application")
 
-    Set objFilesystem = CreateObject("Scripting.FileSystemObject")
-    Set objFolder = objFilesystem.GetFolder(strFolder)
-
-    Set oCATIA = GetObject(, "CATIA.Application")
-    Set oDocuments = oCATIA.Documents
-
-    For Each objFile In objFolder.Files
-
-        If LCase(objFile.Name) Like "*.catpart" Or LCase(objFile.Name) Like "*.catproduct" Then
-
-            Set oDocument = oDocuments.Open(strFolder & "\" & objFile.Name)
-            Set oProduct = oDocument.GetItem("Product1")
-
-            Call oDocument.ExportData(strFolder & "\" & Replace(objFile.Name, ".CATPart", ".stp"), "stp")
-
-            oDocument.Close
-            MsgBox "已导出: " & objFile.Name
-
+    For Each file In folder.Files
+        ext = LCase$(fso.GetExtensionName(file.Name))
+        If ext = "catpart" Or ext = "catproduct" Then
+            On Error GoTo OneFileError
+            outPath = fso.BuildPath(INPUT_FOLDER, fso.GetBaseName(file.Name) & ".stp")
+            Set doc = catApp.Documents.Open(file.Path)
+            doc.ExportData outPath, "stp"
+            ' 关闭刚打开的干净文档；如个别版本仍询问保存，可改用如下安全关闭：
+            ' On Error Resume Next: doc.Close: On Error GoTo OneFileError
+            doc.Close
+            Debug.Print "OK," & outPath
+            okCount = okCount + 1
+            On Error GoTo FatalError
         End If
+ContinueFile:
+    Next file
 
-    Next objFile
+    MsgBox "STEP 导出结束。" & vbCrLf & "成功：" & okCount & vbCrLf & "失败：" & failCount, vbInformation
+    Exit Sub
 
-    MsgBox "批量导出完成！"
+OneFileError:
+    Debug.Print "ERROR," & file.Name & "," & Err.Number & "," & Err.Description
+    failCount = failCount + 1
+    Err.Clear
+    On Error Resume Next
+    If Not doc Is Nothing Then doc.Close
+    Set doc = Nothing
+    On Error GoTo FatalError
+    Resume ContinueFile
 
+FatalError:
+    MsgBox "导出宏中止：" & Err.Number & " - " & Err.Description, vbExclamation
 End Sub

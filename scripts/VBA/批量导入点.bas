@@ -1,50 +1,67 @@
 Attribute VB_Name = "批量导入点数据"
-' ============================================================
-' 功能：从文本文件读取 XYZ 坐标点，在 CATIA 零件中批量创建点
-' 文件格式：每行 "x, y, z"（逗号分隔），如：
-'           10, 20, 30
-'           15, 25, 35
-' 用法：修改 strFile 为你的点数据文件路径后运行
-' 环境：CATIA V5 + VBA
-' ============================================================
+Option Explicit
 
+' 输入格式：每行 x,y,z；空行和以 # 开头的行为忽略。
+' 运行前：修改 POINTS_FILE。宏会把点放入现有第一个几何图形集，或新建几何图形集。
 Sub 批量导入点()
+    Const POINTS_FILE As String = "D:\CATIA\Points\points.txt"
 
-    Dim strFile As String
-    Dim strLine As String
-    Dim aCoords As Variant
-    Dim fso As Object
-    Dim ts As Object
+    Dim catApp As Object, doc As Object, part As Object, hsf As Object
+    Dim hb As Object, pointObj As Object
+    Dim fso As Object, ts As Object
+    Dim lineText As String, parts As Variant
+    Dim x As Double, y As Double, z As Double
+    Dim countOK As Long, countBad As Long, lineNo As Long
 
-    Dim oCATIA As Object
-    Dim oPart As Object
-    Dim oHSF As Object
-    Dim oPointRef As Object
-    Dim oPoint As Object
-    Dim i As Long
-
-    strFile = "D:\CATIA\Points\points.txt"   ' <-- 修改为你的文件
+    On Error GoTo FatalError
+    Set catApp = GetObject(, "CATIA.Application")
+    If catApp.Documents.Count = 0 Then Err.Raise vbObjectError + 100, , "请先打开一个 CATPart。"
+    Set doc = catApp.ActiveDocument
+    If doc.GetType <> "CATPart" Then Err.Raise vbObjectError + 101, , "当前活动文档不是 CATPart。"
 
     Set fso = CreateObject("Scripting.FileSystemObject")
-    Set ts = fso.OpenTextFile(strFile, 1)
+    If Not fso.FileExists(POINTS_FILE) Then Err.Raise vbObjectError + 102, , "找不到点文件：" & POINTS_FILE
+    Set ts = fso.OpenTextFile(POINTS_FILE, 1, False)
 
-    Set oCATIA = GetObject(, "CATIA.Application")
-    Set oPart = oCATIA.ActiveDocument.Part
-    Set oHSF = oPart.HybridShapeFactory
+    Set part = doc.Part
+    Set hsf = part.HybridShapeFactory
 
-    i = 1
+    If part.HybridBodies.Count = 0 Then
+        Set hb = part.HybridBodies.Add
+        hb.Name = "Imported_Points"
+    Else
+        Set hb = part.HybridBodies.Item(1)
+    End If
+
     Do While Not ts.AtEndOfStream
-        strLine = Trim(ts.ReadLine)
-        If Len(strLine) > 0 And Not Left(strLine, 1) = "#" Then
-            aCoords = Split(strLine, ",")
-            Set oPoint = oHSF.AddNewPointCoord(CDbl(aCoords(0)), CDbl(aCoords(1)), CDbl(aCoords(2)))
-            Set oPointRef = oPart.HybridBodies.Item(1).HybridShapes.Add(oPoint)
-            oPart.Update
-            i = i + 1
+        lineNo = lineNo + 1
+        lineText = Trim$(ts.ReadLine)
+        If Len(lineText) > 0 And Left$(lineText, 1) <> "#" Then
+            parts = Split(lineText, ",")
+            If UBound(parts) <> 2 Then
+                countBad = countBad + 1
+                Debug.Print "跳过第 " & lineNo & " 行：需要三个逗号分隔的坐标。"
+            ElseIf Not IsNumeric(Trim$(parts(0))) Or Not IsNumeric(Trim$(parts(1))) Or Not IsNumeric(Trim$(parts(2))) Then
+                countBad = countBad + 1
+                Debug.Print "跳过第 " & lineNo & " 行：坐标不是有效数字。"
+            Else
+                x = CDbl(Trim$(parts(0)))
+                y = CDbl(Trim$(parts(1)))
+                z = CDbl(Trim$(parts(2)))
+                Set pointObj = hsf.AddNewPointCoord(x, y, z)
+                hb.HybridShapes.Add pointObj
+                countOK = countOK + 1
+            End If
         End If
     Loop
 
     ts.Close
-    MsgBox "已导入 " & i - 1 & " 个点"
+    part.Update
+    MsgBox "点导入完成。" & vbCrLf & "成功：" & countOK & vbCrLf & "跳过/错误行：" & countBad, vbInformation
+    Exit Sub
 
+FatalError:
+    On Error Resume Next
+    If Not ts Is Nothing Then ts.Close
+    MsgBox "导入失败：" & Err.Number & " - " & Err.Description, vbExclamation
 End Sub
